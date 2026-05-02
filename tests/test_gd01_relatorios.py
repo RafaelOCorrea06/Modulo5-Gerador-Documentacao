@@ -3,6 +3,10 @@ from fastapi.testclient import TestClient
 from main import app
 
 
+from io import BytesIO
+
+from docx import Document
+
 client = TestClient(app)
 
 
@@ -75,3 +79,58 @@ def test_deve_gerar_relatorio_markdown_com_sucesso():
     assert "Caracteres especiais: ação, código, integração, lambda, omega, seta." in conteudo
     assert "- Receber JSON" in conteudo
     assert "- Gerar Markdown" in conteudo
+
+def test_deve_gerar_relatorio_docx_com_sucesso():
+    payload = {
+        "titulo": "Relatório Técnico — GD-01",
+        "formato": "docx",
+        "subtitulo": "Primeira versão em DOCX",
+        "autor": "Rafael",
+        "metadados": {
+            "Projeto": "Documentação Inteligente",
+            "User Story": "GD-01",
+        },
+        "secoes": [
+            {
+                "titulo": "Objetivo",
+                "paragrafos": [
+                    "Este relatório testa a geração em DOCX.",
+                    "Caracteres especiais: ação, código, integração.",
+                ],
+                "listas": [
+                    [
+                        "Receber JSON",
+                        "Gerar DOCX",
+                        "Retornar arquivo",
+                    ]
+                ],
+                "imagens": [],
+            }
+        ],
+    }
+
+    response = client.post("/reports", json=payload)
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith(
+        "application/vnd.openxmlformats-officedocument"
+    )
+    assert "attachment" in response.headers["content-disposition"]
+    assert "relatorio-tecnico.docx" in response.headers["content-disposition"]
+
+    assert response.content.startswith(b"PK")
+
+    documento = Document(BytesIO(response.content))
+    textos = [paragrafo.text for paragrafo in documento.paragraphs]
+    texto_completo = "\n".join(textos)
+
+    assert "Relatório Técnico — GD-01" in texto_completo
+    assert "Primeira versão em DOCX" in texto_completo
+    assert "Autor: Rafael" in texto_completo
+    assert "Projeto: Documentação Inteligente" in texto_completo
+    assert "User Story: GD-01" in texto_completo
+    assert "Objetivo" in texto_completo
+    assert "Este relatório testa a geração em DOCX." in texto_completo
+    assert "Caracteres especiais: ação, código, integração." in texto_completo
+    assert "Receber JSON" in texto_completo
+    assert "Gerar DOCX" in texto_completo  
