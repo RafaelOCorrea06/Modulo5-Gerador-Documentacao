@@ -1,14 +1,25 @@
 from fastapi.testclient import TestClient
-
 from main import app
-
-
 from io import BytesIO
-
 from docx import Document
+import base64
+from PIL import Image as PILImage
+
 
 client = TestClient(app)
 
+def criar_png_base64_1x1() -> str:
+    """
+    Cria uma imagem PNG 1x1 em memória e devolve o conteúdo em Base64.
+
+    Isso evita depender de arquivo externo no teste.
+    """
+    imagem = PILImage.new("RGB", (1, 1), color=(255, 0, 0))
+
+    buffer = BytesIO()
+    imagem.save(buffer, format="PNG")
+
+    return base64.b64encode(buffer.getvalue()).decode("utf-8")
 
 def test_root_deve_indicar_servico_rodando():
     response = client.get("/")
@@ -171,5 +182,121 @@ def test_deve_gerar_relatorio_pdf_com_sucesso():
     assert "attachment" in response.headers["content-disposition"]
     assert "relatorio-tecnico.pdf" in response.headers["content-disposition"]
 
+    assert response.content.startswith(b"%PDF")
+    assert len(response.content) > 1000
+
+def test_deve_gerar_markdown_com_imagem_incorporada():
+    imagem_base64 = criar_png_base64_1x1()
+
+    payload = {
+        "titulo": "Relatório com Imagem",
+        "formato": "md",
+        "autor": "Rafael",
+        "secoes": [
+            {
+                "titulo": "Diagrama",
+                "paragrafos": [
+                    "Esta seção contém uma imagem incorporada em Base64."
+                ],
+                "listas": [],
+                "imagens": [
+                    {
+                        "nome": "diagrama.png",
+                        "conteudo_base64": imagem_base64,
+                        "tipo_mime": "image/png",
+                        "legenda": "Diagrama simples de arquitetura",
+                    }
+                ],
+            }
+        ],
+    }
+
+    response = client.post("/reports", json=payload)
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/markdown")
+
+    conteudo = response.content.decode("utf-8")
+
+    assert "![Diagrama simples de arquitetura]" in conteudo
+    assert "data:image/png;base64," in conteudo
+    assert imagem_base64 in conteudo
+    assert "*Diagrama simples de arquitetura*" in conteudo
+
+
+def test_deve_gerar_docx_com_imagem_incorporada():
+    imagem_base64 = criar_png_base64_1x1()
+
+    payload = {
+        "titulo": "Relatório DOCX com Imagem",
+        "formato": "docx",
+        "autor": "Rafael",
+        "secoes": [
+            {
+                "titulo": "Diagrama",
+                "paragrafos": [
+                    "Esta seção contém uma imagem incorporada em Base64."
+                ],
+                "listas": [],
+                "imagens": [
+                    {
+                        "nome": "diagrama.png",
+                        "conteudo_base64": imagem_base64,
+                        "tipo_mime": "image/png",
+                        "legenda": "Diagrama simples de arquitetura",
+                    }
+                ],
+            }
+        ],
+    }
+
+    response = client.post("/reports", json=payload)
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith(
+        "application/vnd.openxmlformats-officedocument"
+    )
+    assert response.content.startswith(b"PK")
+
+    documento = Document(BytesIO(response.content))
+
+    textos = [paragrafo.text for paragrafo in documento.paragraphs]
+    texto_completo = "\n".join(textos)
+
+    assert "Relatório DOCX com Imagem" in texto_completo
+    assert "Diagrama" in texto_completo
+    assert "Diagrama simples de arquitetura" in texto_completo
+    assert len(documento.inline_shapes) >= 1
+
+def test_deve_gerar_pdf_com_imagem_incorporada():
+    imagem_base64 = criar_png_base64_1x1()
+
+    payload = {
+        "titulo": "Relatório PDF com Imagem",
+        "formato": "pdf",
+        "autor": "Rafael",
+        "secoes": [
+            {
+                "titulo": "Diagrama",
+                "paragrafos": [
+                    "Esta seção contém uma imagem incorporada em Base64."
+                ],
+                "listas": [],
+                "imagens": [
+                    {
+                        "nome": "diagrama.png",
+                        "conteudo_base64": imagem_base64,
+                        "tipo_mime": "image/png",
+                        "legenda": "Diagrama simples de arquitetura",
+                    }
+                ],
+            }
+        ],
+    }
+
+    response = client.post("/reports", json=payload)
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("application/pdf")
     assert response.content.startswith(b"%PDF")
     assert len(response.content) > 1000

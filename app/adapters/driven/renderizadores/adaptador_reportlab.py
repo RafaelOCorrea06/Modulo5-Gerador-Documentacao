@@ -1,12 +1,17 @@
 import base64
-import tempfile
 from io import BytesIO
-from pathlib import Path
 
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import cm
-from reportlab.platypus import Image, ListFlowable, ListItem, Paragraph, SimpleDocTemplate, Spacer
+from reportlab.platypus import (
+    Image,
+    ListFlowable,
+    ListItem,
+    Paragraph,
+    SimpleDocTemplate,
+    Spacer,
+)
 
 from app.domain.entidades.artefato import ArtefatoGerado
 from app.domain.entidades.documento import DocumentoTecnico
@@ -83,11 +88,22 @@ class AdaptadorReportLab:
         )
 
         elementos = []
+        imagens_em_memoria: list[BytesIO] = []
 
-        elementos.append(Paragraph(self._escapar_texto(documento.titulo), titulo_style))
+        elementos.append(
+            Paragraph(
+                self._escapar_texto(documento.titulo),
+                titulo_style,
+            )
+        )
 
         if documento.subtitulo:
-            elementos.append(Paragraph(self._escapar_texto(documento.subtitulo), subtitulo_style))
+            elementos.append(
+                Paragraph(
+                    self._escapar_texto(documento.subtitulo),
+                    subtitulo_style,
+                )
+            )
 
         if documento.autor:
             elementos.append(
@@ -123,7 +139,12 @@ class AdaptadorReportLab:
             )
 
         for secao in documento.secoes:
-            elementos.append(Paragraph(self._escapar_texto(secao.titulo), secao_style))
+            elementos.append(
+                Paragraph(
+                    self._escapar_texto(secao.titulo),
+                    secao_style,
+                )
+            )
 
             for paragrafo in secao.paragrafos:
                 elementos.append(
@@ -139,7 +160,10 @@ class AdaptadorReportLab:
                 for item in lista:
                     itens_lista.append(
                         ListItem(
-                            Paragraph(self._escapar_texto(item), paragrafo_style),
+                            Paragraph(
+                                self._escapar_texto(item),
+                                paragrafo_style,
+                            ),
                             leftIndent=12,
                         )
                     )
@@ -154,29 +178,36 @@ class AdaptadorReportLab:
 
             for imagem in secao.imagens:
                 imagem_bytes = base64.b64decode(imagem.conteudo_base64)
+                imagem_stream = BytesIO(imagem_bytes)
 
-                with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as temp_img:
-                    temp_img.write(imagem_bytes)
-                    caminho_temp = Path(temp_img.name)
+                # Mantém o stream vivo até o doc.build terminar.
+                imagens_em_memoria.append(imagem_stream)
 
-                try:
-                    elementos.append(Spacer(1, 8))
-                    elementos.append(Image(str(caminho_temp), width=14 * cm, height=8 * cm))
+                elementos.append(Spacer(1, 8))
+                elementos.append(
+                    Image(
+                        imagem_stream,
+                        width=14 * cm,
+                        height=8 * cm,
+                    )
+                )
 
-                    if imagem.legenda:
-                        elementos.append(
-                            Paragraph(
-                                self._escapar_texto(imagem.legenda),
-                                legenda_style,
-                            )
+                if imagem.legenda:
+                    elementos.append(
+                        Paragraph(
+                            self._escapar_texto(imagem.legenda),
+                            legenda_style,
                         )
-                finally:
-                    caminho_temp.unlink(missing_ok=True)
+                    )
 
         doc.build(elementos)
 
         conteudo_pdf = buffer.getvalue()
         buffer.close()
+
+        # Evita aviso de variável não usada e documenta a intenção:
+        # os streams precisam sobreviver até depois do build.
+        imagens_em_memoria.clear()
 
         return ArtefatoGerado(
             nome_arquivo="relatorio-tecnico.pdf",
