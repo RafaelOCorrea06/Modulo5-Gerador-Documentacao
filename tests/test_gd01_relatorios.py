@@ -134,3 +134,42 @@ def test_deve_gerar_relatorio_docx_com_sucesso():
     assert "Caracteres especiais: ação, código, integração." in texto_completo
     assert "Receber JSON" in texto_completo
     assert "Gerar DOCX" in texto_completo  
+
+def test_deve_gerar_relatorio_pdf_com_sucesso():
+    payload = {
+        "titulo": "Relatório Técnico — GD-01",
+        "formato": "pdf",
+        "subtitulo": "Primeira versão em PDF",
+        "autor": "Rafael",
+        "metadados": {
+            "Projeto": "Documentação Inteligente",
+            "User Story": "GD-01",
+        },
+        "secoes": [
+            {
+                "titulo": "Objetivo",
+                "paragrafos": [
+                    "Este relatório testa a geração em PDF.",
+                    "Caracteres especiais: ação, código, integração.",
+                ],
+                "listas": [
+                    [
+                        "Receber JSON",
+                        "Gerar PDF",
+                        "Retornar arquivo",
+                    ]
+                ],
+                "imagens": [],
+            }
+        ],
+    }
+
+    response = client.post("/reports", json=payload)
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("application/pdf")
+    assert "attachment" in response.headers["content-disposition"]
+    assert "relatorio-tecnico.pdf" in response.headers["content-disposition"]
+
+    assert response.content.startswith(b"%PDF")
+    assert len(response.content) > 1000

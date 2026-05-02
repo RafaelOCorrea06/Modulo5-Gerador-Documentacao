@@ -47,7 +47,7 @@ class RelatorioRequest(BaseModel):
     """
 
     titulo: str = Field(..., min_length=1)
-    formato: Literal["md", "markdown", "docx"] = "md"
+    formato: Literal["md", "markdown", "docx", "pdf"] = "md"
     subtitulo: str | None = None
     autor: str | None = None
     metadados: dict[str, str] = Field(default_factory=dict)

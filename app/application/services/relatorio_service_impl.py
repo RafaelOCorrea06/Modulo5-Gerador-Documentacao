@@ -4,6 +4,9 @@ from app.adapters.driven.renderizadores.adaptador_markdown_nativo import (
 from app.adapters.driven.renderizadores.adaptador_pythondocx import (
     AdaptadorPythonDocx,
 )
+from app.adapters.driven.renderizadores.adaptador_reportlab import (
+    AdaptadorReportLab,
+)
 from app.adapters.driving.http.schemas import RelatorioRequest
 from app.domain.entidades.artefato import ArtefatoGerado
 from app.domain.entidades.documento import DocumentoTecnico
@@ -21,6 +24,7 @@ class RelatorioService:
     def __init__(self) -> None:
         self.adaptador_markdown = AdaptadorMarkdownNativo()
         self.adaptador_docx = AdaptadorPythonDocx()
+        self.adaptador_pdf = AdaptadorReportLab()
 
     def gerar(self, request: RelatorioRequest) -> ArtefatoGerado:
         documento = self._converter_request_para_documento(request)
@@ -32,6 +36,9 @@ class RelatorioService:
 
         if formato == "docx":
             return self.adaptador_docx.renderizar(documento)
+
+        if formato == "pdf":
+            return self.adaptador_pdf.renderizar(documento)
 
         raise ValueError(f"Formato não suportado nesta etapa: {documento.formato}")
 
