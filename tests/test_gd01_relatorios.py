@@ -4,6 +4,7 @@ from io import BytesIO
 from docx import Document
 import base64
 from PIL import Image as PILImage
+import time 
 
 
 client = TestClient(app)
@@ -20,6 +21,64 @@ def criar_png_base64_1x1() -> str:
     imagem.save(buffer, format="PNG")
 
     return base64.b64encode(buffer.getvalue()).decode("utf-8")
+
+def criar_payload_relatorio_grande(formato: str) -> dict:
+    """
+    Cria um payload grande o suficiente para simular um relatório longo.
+
+    A ideia é gerar muitas seções com parágrafos e listas para aproximar
+    um relatório técnico de até 30 páginas, sem depender de arquivo externo.
+    """
+    secoes = []
+
+    for numero_secao in range(1, 31):
+        secoes.append(
+            {
+                "titulo": f"Seção {numero_secao} - Análise Técnica",
+                "paragrafos": [
+                    (
+                        "Este parágrafo simula conteúdo técnico de um relatório "
+                        "de engenharia de software. Ele descreve decisões "
+                        "arquiteturais, critérios de implementação, riscos, "
+                        "dependências entre serviços e observações relevantes "
+                        "para auditoria documental."
+                    ),
+                    (
+                        "Caracteres especiais preservados: ação, código, "
+                        "integração, documentação, arquitetura, serviço, "
+                        "módulo, validação, rastreabilidade."
+                    ),
+                    (
+                        "O objetivo deste conteúdo é aumentar o volume do "
+                        "documento para validar o desempenho da geração em "
+                        "relatórios maiores, aproximando o cenário de uso real."
+                    ),
+                ],
+                "listas": [
+                    [
+                        "Receber estrutura JSON",
+                        "Validar seções, parágrafos, listas e imagens",
+                        "Gerar artefato no formato solicitado",
+                        "Retornar arquivo para download",
+                        "Preservar caracteres especiais",
+                    ]
+                ],
+                "imagens": [],
+            }
+        )
+
+    return {
+        "titulo": "Relatório Técnico Grande — GD-01",
+        "formato": formato,
+        "subtitulo": "Teste de desempenho para relatório extenso",
+        "autor": "Rafael",
+        "metadados": {
+            "Projeto": "Documentação Inteligente",
+            "User Story": "GD-01",
+            "Critério": "Tempo de geração menor que 10 segundos",
+        },
+        "secoes": secoes,
+    }
 
 def test_root_deve_indicar_servico_rodando():
     response = client.get("/")
@@ -300,3 +359,67 @@ def test_deve_gerar_pdf_com_imagem_incorporada():
     assert response.headers["content-type"].startswith("application/pdf")
     assert response.content.startswith(b"%PDF")
     assert len(response.content) > 1000
+
+def test_deve_gerar_relatorio_pdf_grande_em_menos_de_10_segundos():
+    payload = criar_payload_relatorio_grande("pdf")
+
+    inicio = time.perf_counter()
+
+    response = client.post("/reports", json=payload)
+
+    duracao = time.perf_counter() - inicio
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("application/pdf")
+    assert response.content.startswith(b"%PDF")
+    assert len(response.content) > 1000
+
+    assert duracao < 10, (
+        f"Geração demorou {duracao:.2f}s, "
+        "mas o limite do critério de aceitação é 10s."
+    )
+
+def test_deve_gerar_relatorio_docx_grande_em_menos_de_10_segundos():
+    payload = criar_payload_relatorio_grande("docx")
+
+    inicio = time.perf_counter()
+
+    response = client.post("/reports", json=payload)
+
+    duracao = time.perf_counter() - inicio
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith(
+        "application/vnd.openxmlformats-officedocument"
+    )
+    assert response.content.startswith(b"PK")
+    assert len(response.content) > 1000
+
+    assert duracao < 10, (
+        f"Geração DOCX demorou {duracao:.2f}s, "
+        "mas o limite do critério de aceitação é 10s."
+    )
+
+
+def test_deve_gerar_relatorio_markdown_grande_em_menos_de_10_segundos():
+    payload = criar_payload_relatorio_grande("md")
+
+    inicio = time.perf_counter()
+
+    response = client.post("/reports", json=payload)
+
+    duracao = time.perf_counter() - inicio
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/markdown")
+    assert len(response.content) > 1000
+
+    conteudo = response.content.decode("utf-8")
+
+    assert "# Relatório Técnico Grande — GD-01" in conteudo
+    assert "Seção 30 - Análise Técnica" in conteudo
+
+    assert duracao < 10, (
+        f"Geração Markdown demorou {duracao:.2f}s, "
+        "mas o limite do critério de aceitação é 10s."
+    )
