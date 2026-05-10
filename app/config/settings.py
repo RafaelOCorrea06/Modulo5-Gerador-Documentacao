@@ -27,3 +27,6 @@ ADAPTADOR_GITHUB = os.getenv("ADAPTADOR_GITHUB", "http")  # "http" | "fake"
 MERMAID_INK_BASE = os.getenv("MERMAID_INK_BASE", "https://mermaid.ink")
 MERMAID_TIMEOUT_S = float(os.getenv("MERMAID_TIMEOUT_S", "20.0"))
 RENDERIZADOR_MERMAID = os.getenv("RENDERIZADOR_MERMAID", "ink")  # "ink" | "fake"
+
+# Persistencia de matrizes de rastreabilidade (US GD-06).
+MATRIZ_SQLITE_PATH = os.getenv("MATRIZ_SQLITE_PATH", "gerador_matrizes.db")

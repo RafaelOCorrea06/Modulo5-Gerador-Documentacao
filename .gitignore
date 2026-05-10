@@ -61,6 +61,11 @@ local_settings.py
 db.sqlite3
 db.sqlite3-journal
 
+# Bancos locais do Gerador (matrizes etc)
+*.db
+*.sqlite
+*.sqlite-journal
+
 # Flask stuff:
 instance/
 .webassets-cache
