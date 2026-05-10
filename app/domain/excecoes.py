@@ -49,3 +49,28 @@ class ItemMatrizNaoEncontradoError(LookupError):
 class VinculoMatrizDuplicadoError(ValueError):
     """Esse par (requisito_id, teste_id) ja existe na matriz."""
     pass
+
+
+class JobInvalidoError(ValueError):
+    """Tipo de job desconhecido ou parametros faltando."""
+    pass
+
+
+class JobNaoEncontradoError(LookupError):
+    """Job nao existe."""
+    pass
+
+
+class JobNaoConcluidoError(RuntimeError):
+    """Tentativa de baixar artefato de job que ainda nao terminou ou que falhou."""
+    pass
+
+
+class ArtefatoExpiradoError(RuntimeError):
+    """URL de download expirou (24h apos criacao do job)."""
+    pass
+
+
+class ArtefatoNaoEncontradoError(LookupError):
+    """Artefato fisico nao localizado para o job (apagado ou nunca gerado)."""
+    pass

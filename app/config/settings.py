@@ -30,3 +30,8 @@ RENDERIZADOR_MERMAID = os.getenv("RENDERIZADOR_MERMAID", "ink")  # "ink" | "fake
 
 # Persistencia de matrizes de rastreabilidade (US GD-06).
 MATRIZ_SQLITE_PATH = os.getenv("MATRIZ_SQLITE_PATH", "gerador_matrizes.db")
+
+# Jobs e artefatos assincronos (US GD-09).
+JOBS_SQLITE_PATH = os.getenv("JOBS_SQLITE_PATH", "gerador_jobs.db")
+ARTEFATOS_DIR = os.getenv("ARTEFATOS_DIR", "gerador_artefatos")
+JOBS_TTL_HORAS = int(os.getenv("JOBS_TTL_HORAS", "24"))
