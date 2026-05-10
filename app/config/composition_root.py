@@ -1,6 +1,12 @@
 # Composition Root do Gerador-Documentacao.
 # Unico lugar que conhece implementacoes concretas e injeta dependencias.
 
+from app.adapters.driven.persistence.repositorio_artefatos_filesystem import (
+    RepositorioArtefatosFilesystem,
+)
+from app.adapters.driven.persistence.repositorio_jobs_sqlite import (
+    RepositorioJobsSQLite,
+)
 from app.adapters.driven.persistence.repositorio_matriz_sqlite import (
     RepositorioMatrizSQLite,
 )
@@ -25,6 +31,7 @@ from app.adapters.driven.clients.fonte_codigo_github import (
 )
 from app.application.services.apresentacao_service_impl import ApresentacaoServiceImpl
 from app.application.services.diagrama_service_impl import DiagramaServiceImpl
+from app.application.services.job_service_impl import JobServiceImpl
 from app.application.services.matriz_service_impl import MatrizServiceImpl
 from app.config import settings
 
@@ -66,6 +73,10 @@ class CompositionRoot:
         self.renderizador_markdown = RenderizadorMarkdownNativo()
         self.renderizador_pdf = RenderizadorPDFReportlab()
 
+        # Driven adapters — jobs (GD-09)
+        self.repositorio_jobs = RepositorioJobsSQLite(settings.JOBS_SQLITE_PATH)
+        self.repositorio_artefatos = RepositorioArtefatosFilesystem(settings.ARTEFATOS_DIR)
+
         # Services
         self.apresentacao_service = ApresentacaoServiceImpl(self.renderizador_pptx)
         self.diagrama_service = DiagramaServiceImpl(
@@ -78,6 +89,14 @@ class CompositionRoot:
             renderizador_markdown=self.renderizador_markdown,
             renderizador_pdf=self.renderizador_pdf,
         )
+        self.job_service = JobServiceImpl(
+            repositorio_jobs=self.repositorio_jobs,
+            repositorio_artefatos=self.repositorio_artefatos,
+            apresentacao_service=self.apresentacao_service,
+            matriz_service=self.matriz_service,
+            diagrama_service=self.diagrama_service,
+            ttl_horas=settings.JOBS_TTL_HORAS,
+        )
 
     def get_apresentacao_service(self) -> ApresentacaoServiceImpl:
         return self.apresentacao_service
@@ -87,3 +106,6 @@ class CompositionRoot:
 
     def get_matriz_service(self) -> MatrizServiceImpl:
         return self.matriz_service
+
+    def get_job_service(self) -> JobServiceImpl:
+        return self.job_service
