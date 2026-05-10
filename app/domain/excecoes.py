@@ -29,3 +29,23 @@ class RenderizadorMermaidError(RuntimeError):
 class RequisicaoDiagramaInvalidaError(ValueError):
     """Inputs invalidos para gerar diagrama (repo malformado, formato desconhecido, etc)."""
     pass
+
+
+class MatrizInvalidaError(ValueError):
+    """Matriz de rastreabilidade com dados invalidos (campos vazios, ids duplicados, etc)."""
+    pass
+
+
+class MatrizNaoEncontradaError(LookupError):
+    """Matriz com esse id nao existe."""
+    pass
+
+
+class ItemMatrizNaoEncontradoError(LookupError):
+    """Requisito ou teste referenciado nao existe na matriz."""
+    pass
+
+
+class VinculoMatrizDuplicadoError(ValueError):
+    """Esse par (requisito_id, teste_id) ja existe na matriz."""
+    pass
