@@ -1,17 +1,16 @@
+# Entidade de dominio: Artefato (US GD-09)
+# Bytes gerados por um Job — armazenados no filesystem e referenciados pelo job_id.
+
 from dataclasses import dataclass
 
 
 @dataclass(frozen=True)
-class ArtefatoGerado:
-    """
-    Representa um arquivo gerado pelo serviço.
-
-    Exemplo:
-    - nome_arquivo: relatorio-tecnico.md
-    - conteudo: bytes do arquivo
-    - media_type: tipo MIME usado na resposta HTTP
-    """
-
-    nome_arquivo: str
+class Artefato:
+    job_id: str
+    nome: str
+    mime_type: str
     conteudo: bytes
-    media_type: str
+
+    @property
+    def tamanho_bytes(self) -> int:
+        return len(self.conteudo)

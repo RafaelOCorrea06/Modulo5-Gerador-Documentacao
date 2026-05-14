@@ -1,69 +1,91 @@
-from app.domain.entidades.artefato import ArtefatoGerado
-from app.domain.entidades.documento import DocumentoTecnico
+# Renderizador Markdown nativo (US GD-06).
+
+from app.application.ports.driven.renderizador_markdown import RenderizadorMarkdown
+from app.domain.entidades.matriz_rastreabilidade import (
+    MatrizRastreabilidade,
+    NivelCobertura,
+)
 
 
-class AdaptadorMarkdownNativo:
-    """
-    Adaptador responsável por transformar um DocumentoTecnico em Markdown.
+class RenderizadorMarkdownNativo(RenderizadorMarkdown):
 
-    Ele é chamado de 'nativo' porque não depende de biblioteca externa
-    para montar o conteúdo Markdown.
-    """
+    def renderizar_matriz(self, matriz: MatrizRastreabilidade) -> str:
+        cobertura = matriz.cobertura_por_requisito()
+        lacunas = matriz.calcular_lacunas()
+        mapa_req = {r.id: r for r in matriz.requisitos}
 
-    def renderizar(self, documento: DocumentoTecnico) -> ArtefatoGerado:
-        linhas: list[str] = []
-
-        linhas.append(f"# {documento.titulo}")
+        linhas = []
+        linhas.append(f"# Matriz de Rastreabilidade — {matriz.nome}")
+        if matriz.descricao:
+            linhas.append("")
+            linhas.append(matriz.descricao)
+        linhas.append("")
+        linhas.append(f"_Atualizada em {matriz.atualizada_em.isoformat()}_")
         linhas.append("")
 
-        if documento.subtitulo:
-            linhas.append(f"## {documento.subtitulo}")
-            linhas.append("")
+        # --- Resumo ---
+        linhas.append("## Resumo")
+        linhas.append(f"- Requisitos: **{len(matriz.requisitos)}**")
+        linhas.append(f"- Testes: **{len(matriz.testes)}**")
+        linhas.append(f"- Vinculos: **{len(matriz.vinculos)}**")
+        linhas.append(f"- Lacunas detectadas: **{lacunas.total()}**")
+        linhas.append("")
 
-        if documento.autor:
-            linhas.append(f"**Autor:** {documento.autor}")
-            linhas.append("")
+        # --- Cobertura por requisito ---
+        linhas.append("## Cobertura por Requisito")
+        if not matriz.requisitos:
+            linhas.append("_Nenhum requisito cadastrado._")
+        else:
+            linhas.append("| Requisito | Titulo | Prioridade | Testes | Status |")
+            linhas.append("|---|---|---|---|---|")
+            niveis = {(v.requisito_id, v.teste_id): v.nivel_cobertura for v in matriz.vinculos}
+            for r in matriz.requisitos:
+                testes_ids = cobertura.get(r.id, [])
+                if not testes_ids:
+                    status = "FALTA"
+                elif r.id in lacunas.requisitos_com_cobertura_parcial:
+                    status = "PARCIAL"
+                else:
+                    status = "OK"
+                marcadores = ", ".join(
+                    f"`{tid}`" + (
+                        " (parcial)" if niveis.get((r.id, tid)) == NivelCobertura.PARCIAL else ""
+                    )
+                    for tid in testes_ids
+                ) or "—"
+                linhas.append(f"| `{r.id}` | {r.titulo} | {r.prioridade} | {marcadores} | **{status}** |")
+        linhas.append("")
 
-        if documento.metadados:
-            linhas.append("## Metadados")
-            linhas.append("")
+        # --- Testes ---
+        linhas.append("## Testes")
+        if not matriz.testes:
+            linhas.append("_Nenhum teste cadastrado._")
+        else:
+            linhas.append("| ID | Titulo | Tipo |")
+            linhas.append("|---|---|---|")
+            for t in matriz.testes:
+                linhas.append(f"| `{t.id}` | {t.titulo} | {t.tipo.value} |")
+        linhas.append("")
 
-            for chave, valor in documento.metadados.items():
-                linhas.append(f"- **{chave}:** {valor}")
-
-            linhas.append("")
-
-        for secao in documento.secoes:
-            linhas.append(f"## {secao.titulo}")
-            linhas.append("")
-
-            for paragrafo in secao.paragrafos:
-                linhas.append(paragrafo)
+        # --- Lacunas ---
+        linhas.append("## Lacunas")
+        if lacunas.total() == 0:
+            linhas.append("Sem lacunas — cobertura completa.")
+        else:
+            if lacunas.requisitos_sem_teste:
+                linhas.append("### Requisitos sem teste")
+                for rid in lacunas.requisitos_sem_teste:
+                    titulo = mapa_req[rid].titulo if rid in mapa_req else ""
+                    linhas.append(f"- `{rid}` — {titulo}")
+            if lacunas.requisitos_com_cobertura_parcial:
                 linhas.append("")
-
-            for lista in secao.listas:
-                for item in lista:
-                    linhas.append(f"- {item}")
+                linhas.append("### Requisitos com cobertura parcial")
+                for rid in lacunas.requisitos_com_cobertura_parcial:
+                    linhas.append(f"- `{rid}`")
+            if lacunas.testes_sem_requisito:
                 linhas.append("")
+                linhas.append("### Testes orfaos (sem requisito)")
+                for tid in lacunas.testes_sem_requisito:
+                    linhas.append(f"- `{tid}`")
 
-            for imagem in secao.imagens:
-                texto_alt = imagem.legenda or imagem.nome
-
-                linhas.append(
-                    f"![{texto_alt}]"
-                    f"(data:{imagem.tipo_mime};base64,{imagem.conteudo_base64})"
-                )
-
-                if imagem.legenda:
-                    linhas.append("")
-                    linhas.append(f"*{imagem.legenda}*")
-
-                linhas.append("")
-
-        conteudo_markdown = "\n".join(linhas).strip() + "\n"
-
-        return ArtefatoGerado(
-            nome_arquivo="relatorio-tecnico.md",
-            conteudo=conteudo_markdown.encode("utf-8"),
-            media_type="text/markdown; charset=utf-8",
-        )
+        return "\n".join(linhas) + "\n"

@@ -1,229 +1,138 @@
-import base64
-from io import BytesIO
+# Renderizador PDF via reportlab (US GD-06).
 
+import io
+from typing import List
+
+from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
-from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import cm
 from reportlab.platypus import (
-    Image,
-    ListFlowable,
-    ListItem,
-    Paragraph,
-    SimpleDocTemplate,
-    Spacer,
+    Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle,
 )
 
-from app.domain.entidades.artefato import ArtefatoGerado
-from app.domain.entidades.documento import DocumentoTecnico
+from app.application.ports.driven.renderizador_pdf import RenderizadorPDF
+from app.domain.entidades.matriz_rastreabilidade import (
+    MatrizRastreabilidade,
+    NivelCobertura,
+)
+from app.domain.excecoes import RenderizadorError
 
 
-class AdaptadorReportLab:
-    """
-    Adaptador responsável por transformar um DocumentoTecnico em PDF.
+_VERMELHO_MACKENZIE = colors.HexColor("#9F1B32")
+_CINZA_LEVE = colors.HexColor("#F4F4F4")
 
-    Este adaptador usa a biblioteca ReportLab para montar o PDF.
-    Ele recebe a entidade de domínio DocumentoTecnico e devolve um ArtefatoGerado.
-    """
 
-    def renderizar(self, documento: DocumentoTecnico) -> ArtefatoGerado:
-        buffer = BytesIO()
+class RenderizadorPDFReportlab(RenderizadorPDF):
 
+    def renderizar_matriz(self, matriz: MatrizRastreabilidade) -> bytes:
+        try:
+            return self._renderizar(matriz)
+        except RenderizadorError:
+            raise
+        except Exception as e:
+            raise RenderizadorError(f"falha no reportlab: {e}") from e
+
+    def _renderizar(self, matriz: MatrizRastreabilidade) -> bytes:
+        buffer = io.BytesIO()
         doc = SimpleDocTemplate(
-            buffer,
-            pagesize=A4,
-            rightMargin=2 * cm,
-            leftMargin=2 * cm,
-            topMargin=2 * cm,
-            bottomMargin=2 * cm,
-            title=documento.titulo,
-            author=documento.autor or "",
+            buffer, pagesize=A4,
+            leftMargin=2 * cm, rightMargin=2 * cm,
+            topMargin=2 * cm, bottomMargin=2 * cm,
+            title=f"Matriz {matriz.nome}",
         )
-
         styles = getSampleStyleSheet()
-
         titulo_style = ParagraphStyle(
-            name="TituloPrincipal",
-            parent=styles["Title"],
-            fontName="Helvetica-Bold",
-            fontSize=20,
-            leading=24,
-            spaceAfter=18,
+            "Titulo", parent=styles["Heading1"],
+            textColor=_VERMELHO_MACKENZIE, spaceAfter=12,
         )
-
-        subtitulo_style = ParagraphStyle(
-            name="Subtitulo",
-            parent=styles["Heading1"],
-            fontName="Helvetica-Bold",
-            fontSize=15,
-            leading=19,
-            spaceAfter=12,
+        h2_style = ParagraphStyle(
+            "H2", parent=styles["Heading2"],
+            textColor=_VERMELHO_MACKENZIE, spaceBefore=14, spaceAfter=6,
         )
+        normal = styles["BodyText"]
 
-        secao_style = ParagraphStyle(
-            name="Secao",
-            parent=styles["Heading2"],
-            fontName="Helvetica-Bold",
-            fontSize=14,
-            leading=18,
-            spaceBefore=14,
-            spaceAfter=8,
-        )
+        story = []
+        story.append(Paragraph(f"Matriz de Rastreabilidade — {matriz.nome}", titulo_style))
+        if matriz.descricao:
+            story.append(Paragraph(matriz.descricao, normal))
+        story.append(Paragraph(f"<i>Atualizada em {matriz.atualizada_em.isoformat()}</i>", normal))
+        story.append(Spacer(1, 0.5 * cm))
 
-        paragrafo_style = ParagraphStyle(
-            name="Paragrafo",
-            parent=styles["BodyText"],
-            fontName="Helvetica",
-            fontSize=10.5,
-            leading=14,
-            spaceAfter=8,
-        )
+        # Resumo
+        lacunas = matriz.calcular_lacunas()
+        story.append(Paragraph("Resumo", h2_style))
+        resumo_dados = [
+            ["Requisitos", str(len(matriz.requisitos))],
+            ["Testes", str(len(matriz.testes))],
+            ["Vinculos", str(len(matriz.vinculos))],
+            ["Lacunas detectadas", str(lacunas.total())],
+        ]
+        resumo_tabela = Table(resumo_dados, colWidths=[6 * cm, 3 * cm])
+        resumo_tabela.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (0, -1), _CINZA_LEVE),
+            ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+            ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("LEFTPADDING", (0, 0), (-1, -1), 6),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+        ]))
+        story.append(resumo_tabela)
 
-        legenda_style = ParagraphStyle(
-            name="Legenda",
-            parent=styles["Italic"],
-            fontName="Helvetica-Oblique",
-            fontSize=9,
-            leading=12,
-            spaceAfter=10,
-        )
+        # Cobertura por requisito
+        story.append(Paragraph("Cobertura por Requisito", h2_style))
+        story.append(self._tabela_cobertura(matriz, lacunas))
 
-        elementos = []
-        imagens_em_memoria: list[BytesIO] = []
+        # Lacunas
+        if lacunas.total() > 0:
+            story.append(Paragraph("Lacunas", h2_style))
+            if lacunas.requisitos_sem_teste:
+                story.append(Paragraph("<b>Requisitos sem teste:</b>", normal))
+                for rid in lacunas.requisitos_sem_teste:
+                    story.append(Paragraph(f"- {rid}", normal))
+            if lacunas.requisitos_com_cobertura_parcial:
+                story.append(Paragraph("<b>Cobertura parcial:</b>", normal))
+                for rid in lacunas.requisitos_com_cobertura_parcial:
+                    story.append(Paragraph(f"- {rid}", normal))
+            if lacunas.testes_sem_requisito:
+                story.append(Paragraph("<b>Testes orfaos:</b>", normal))
+                for tid in lacunas.testes_sem_requisito:
+                    story.append(Paragraph(f"- {tid}", normal))
 
-        elementos.append(
-            Paragraph(
-                self._escapar_texto(documento.titulo),
-                titulo_style,
-            )
-        )
+        doc.build(story)
+        return buffer.getvalue()
 
-        if documento.subtitulo:
-            elementos.append(
-                Paragraph(
-                    self._escapar_texto(documento.subtitulo),
-                    subtitulo_style,
-                )
-            )
+    def _tabela_cobertura(self, matriz: MatrizRastreabilidade, lacunas) -> Table:
+        cobertura = matriz.cobertura_por_requisito()
+        niveis = {(v.requisito_id, v.teste_id): v.nivel_cobertura for v in matriz.vinculos}
+        cabecalho = ["Requisito", "Titulo", "Prio", "Testes", "Status"]
+        dados: List[List[str]] = [cabecalho]
 
-        if documento.autor:
-            elementos.append(
-                Paragraph(
-                    f"<b>Autor:</b> {self._escapar_texto(documento.autor)}",
-                    paragrafo_style,
-                )
-            )
+        for r in matriz.requisitos:
+            testes_ids = cobertura.get(r.id, [])
+            if not testes_ids:
+                status = "FALTA"
+            elif r.id in lacunas.requisitos_com_cobertura_parcial:
+                status = "PARCIAL"
+            else:
+                status = "OK"
+            marcadores = ", ".join(
+                tid + ("*" if niveis.get((r.id, tid)) == NivelCobertura.PARCIAL else "")
+                for tid in testes_ids
+            ) or "—"
+            dados.append([r.id, r.titulo, r.prioridade, marcadores, status])
 
-        if documento.metadados:
-            elementos.append(Paragraph("Metadados", secao_style))
+        if len(dados) == 1:
+            dados.append(["—", "Nenhum requisito cadastrado.", "—", "—", "—"])
 
-            itens_metadados = []
-
-            for chave, valor in documento.metadados.items():
-                texto_item = (
-                    f"<b>{self._escapar_texto(chave)}:</b> "
-                    f"{self._escapar_texto(valor)}"
-                )
-                itens_metadados.append(
-                    ListItem(
-                        Paragraph(texto_item, paragrafo_style),
-                        leftIndent=12,
-                    )
-                )
-
-            elementos.append(
-                ListFlowable(
-                    itens_metadados,
-                    bulletType="bullet",
-                    leftIndent=18,
-                )
-            )
-
-        for secao in documento.secoes:
-            elementos.append(
-                Paragraph(
-                    self._escapar_texto(secao.titulo),
-                    secao_style,
-                )
-            )
-
-            for paragrafo in secao.paragrafos:
-                elementos.append(
-                    Paragraph(
-                        self._escapar_texto(paragrafo),
-                        paragrafo_style,
-                    )
-                )
-
-            for lista in secao.listas:
-                itens_lista = []
-
-                for item in lista:
-                    itens_lista.append(
-                        ListItem(
-                            Paragraph(
-                                self._escapar_texto(item),
-                                paragrafo_style,
-                            ),
-                            leftIndent=12,
-                        )
-                    )
-
-                elementos.append(
-                    ListFlowable(
-                        itens_lista,
-                        bulletType="bullet",
-                        leftIndent=18,
-                    )
-                )
-
-            for imagem in secao.imagens:
-                imagem_bytes = base64.b64decode(imagem.conteudo_base64)
-                imagem_stream = BytesIO(imagem_bytes)
-
-                # Mantém o stream vivo até o doc.build terminar.
-                imagens_em_memoria.append(imagem_stream)
-
-                elementos.append(Spacer(1, 8))
-                elementos.append(
-                    Image(
-                        imagem_stream,
-                        width=14 * cm,
-                        height=8 * cm,
-                    )
-                )
-
-                if imagem.legenda:
-                    elementos.append(
-                        Paragraph(
-                            self._escapar_texto(imagem.legenda),
-                            legenda_style,
-                        )
-                    )
-
-        doc.build(elementos)
-
-        conteudo_pdf = buffer.getvalue()
-        buffer.close()
-
-        # Evita aviso de variável não usada e documenta a intenção:
-        # os streams precisam sobreviver até depois do build.
-        imagens_em_memoria.clear()
-
-        return ArtefatoGerado(
-            nome_arquivo="relatorio-tecnico.pdf",
-            conteudo=conteudo_pdf,
-            media_type="application/pdf",
-        )
-
-    def _escapar_texto(self, texto: str) -> str:
-        """
-        Escapa caracteres que podem ser interpretados como marcação pelo ReportLab.
-
-        O Paragraph do ReportLab aceita uma mini linguagem parecida com HTML.
-        Por isso, se o texto tiver &, < ou >, precisamos escapar.
-        """
-        return (
-            texto.replace("&", "&amp;")
-            .replace("<", "&lt;")
-            .replace(">", "&gt;")
-        )
+        tabela = Table(dados, colWidths=[3 * cm, 5 * cm, 1.5 * cm, 5 * cm, 2 * cm])
+        tabela.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), _VERMELHO_MACKENZIE),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("LEFTPADDING", (0, 0), (-1, -1), 4),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+        ]))
+        return tabela
