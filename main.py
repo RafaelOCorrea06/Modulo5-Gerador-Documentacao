@@ -6,6 +6,7 @@ from app.adapters.driving.http import (
     diagrama_routes,
     job_routes,
     matriz_routes,
+    relatorio_routes,
     saude_routes,
 )
 
@@ -20,11 +21,16 @@ app.include_router(apresentacao_routes.router)
 app.include_router(diagrama_routes.router)
 app.include_router(matriz_routes.router)
 app.include_router(job_routes.router)
+app.include_router(relatorio_routes.router)
 
 
 @app.get("/")
 def read_root():
-    return {"message": "Serviço de Geração de Documentação Ativo"}
+    return {
+        "message": "Serviço de Geração de Documentação Ativo",
+        "service": "gerador-documentacao",
+        "status": "running",
+    }
 
 
 if __name__ == "__main__":

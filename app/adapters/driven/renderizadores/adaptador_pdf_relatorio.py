@@ -1,0 +1,220 @@
+import base64
+from io import BytesIO
+
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+from reportlab.lib.units import cm
+from reportlab.platypus import (
+    Image,
+    ListFlowable,
+    ListItem,
+    Paragraph,
+    SimpleDocTemplate,
+    Spacer,
+)
+
+from app.domain.entidades.artefato import ArtefatoGerado
+from app.domain.entidades.documento import DocumentoTecnico
+
+
+class AdaptadorPdfRelatorio:
+    """
+    Adaptador responsável por transformar um DocumentoTecnico em PDF.
+
+    Este adaptador é específico da GD-01, para relatórios técnicos.
+    Ele fica separado do adaptador_reportlab.py para não interferir
+    em outras user stories que também usam ReportLab.
+    """
+
+    def renderizar(self, documento: DocumentoTecnico) -> ArtefatoGerado:
+        buffer = BytesIO()
+
+        doc = SimpleDocTemplate(
+            buffer,
+            pagesize=A4,
+            rightMargin=2 * cm,
+            leftMargin=2 * cm,
+            topMargin=2 * cm,
+            bottomMargin=2 * cm,
+            title=documento.titulo,
+            author=documento.autor or "",
+        )
+
+        styles = getSampleStyleSheet()
+
+        titulo_style = ParagraphStyle(
+            name="TituloPrincipalRelatorio",
+            parent=styles["Title"],
+            fontName="Helvetica-Bold",
+            fontSize=20,
+            leading=24,
+            spaceAfter=18,
+        )
+
+        subtitulo_style = ParagraphStyle(
+            name="SubtituloRelatorio",
+            parent=styles["Heading1"],
+            fontName="Helvetica-Bold",
+            fontSize=15,
+            leading=19,
+            spaceAfter=12,
+        )
+
+        secao_style = ParagraphStyle(
+            name="SecaoRelatorio",
+            parent=styles["Heading2"],
+            fontName="Helvetica-Bold",
+            fontSize=14,
+            leading=18,
+            spaceBefore=14,
+            spaceAfter=8,
+        )
+
+        paragrafo_style = ParagraphStyle(
+            name="ParagrafoRelatorio",
+            parent=styles["BodyText"],
+            fontName="Helvetica",
+            fontSize=10.5,
+            leading=14,
+            spaceAfter=8,
+        )
+
+        legenda_style = ParagraphStyle(
+            name="LegendaRelatorio",
+            parent=styles["Italic"],
+            fontName="Helvetica-Oblique",
+            fontSize=9,
+            leading=12,
+            spaceAfter=10,
+        )
+
+        elementos = []
+        imagens_em_memoria: list[BytesIO] = []
+
+        elementos.append(
+            Paragraph(
+                self._escapar_texto(documento.titulo),
+                titulo_style,
+            )
+        )
+
+        if documento.subtitulo:
+            elementos.append(
+                Paragraph(
+                    self._escapar_texto(documento.subtitulo),
+                    subtitulo_style,
+                )
+            )
+
+        if documento.autor:
+            elementos.append(
+                Paragraph(
+                    f"<b>Autor:</b> {self._escapar_texto(documento.autor)}",
+                    paragrafo_style,
+                )
+            )
+
+        if documento.metadados:
+            elementos.append(Paragraph("Metadados", secao_style))
+
+            itens_metadados = []
+
+            for chave, valor in documento.metadados.items():
+                texto_item = (
+                    f"<b>{self._escapar_texto(chave)}:</b> "
+                    f"{self._escapar_texto(valor)}"
+                )
+                itens_metadados.append(
+                    ListItem(
+                        Paragraph(texto_item, paragrafo_style),
+                        leftIndent=12,
+                    )
+                )
+
+            elementos.append(
+                ListFlowable(
+                    itens_metadados,
+                    bulletType="bullet",
+                    leftIndent=18,
+                )
+            )
+
+        for secao in documento.secoes:
+            elementos.append(
+                Paragraph(
+                    self._escapar_texto(secao.titulo),
+                    secao_style,
+                )
+            )
+
+            for paragrafo in secao.paragrafos:
+                elementos.append(
+                    Paragraph(
+                        self._escapar_texto(paragrafo),
+                        paragrafo_style,
+                    )
+                )
+
+            for lista in secao.listas:
+                itens_lista = []
+
+                for item in lista:
+                    itens_lista.append(
+                        ListItem(
+                            Paragraph(
+                                self._escapar_texto(item),
+                                paragrafo_style,
+                            ),
+                            leftIndent=12,
+                        )
+                    )
+
+                elementos.append(
+                    ListFlowable(
+                        itens_lista,
+                        bulletType="bullet",
+                        leftIndent=18,
+                    )
+                )
+
+            for imagem in secao.imagens:
+                imagem_bytes = base64.b64decode(imagem.conteudo_base64)
+                imagem_stream = BytesIO(imagem_bytes)
+
+                imagens_em_memoria.append(imagem_stream)
+
+                elementos.append(Spacer(1, 8))
+                elementos.append(
+                    Image(
+                        imagem_stream,
+                        width=14 * cm,
+                        height=8 * cm,
+                    )
+                )
+
+                if imagem.legenda:
+                    elementos.append(
+                        Paragraph(
+                            self._escapar_texto(imagem.legenda),
+                            legenda_style,
+                        )
+                    )
+
+        doc.build(elementos)
+
+        conteudo_pdf = buffer.getvalue()
+        buffer.close()
+        imagens_em_memoria.clear()
+
+        return ArtefatoGerado(
+            nome_arquivo="relatorio-tecnico.pdf",
+            conteudo=conteudo_pdf,
+            media_type="application/pdf",
+        )
+
+    def _escapar_texto(self, texto: str) -> str:
+        return (
+            texto.replace("&", "&amp;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;")
+        )
