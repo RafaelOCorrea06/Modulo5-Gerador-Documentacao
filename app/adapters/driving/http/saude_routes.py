@@ -32,8 +32,10 @@ async def get_ready():
     fim = time.time()
     latencia_ms = (fim - inicio) * 1000
 
-    # Critério: Todas as libs OK e tempo < 100ms
-    is_ready = all(v == "ok" for v in status_libs.values()) and latencia_ms < 100
+    # Critério: apenas todas as libs OK. A latência é medida e reportada
+    # de forma informativa, mas NÃO derruba a prontidão — uma primeira
+    # importação lenta (cold start) não deve marcar o serviço como "not ready".
+    is_ready = all(v == "ok" for v in status_libs.values())
 
     resultado = {
         "status": "ready" if is_ready else "unready",
@@ -42,7 +44,7 @@ async def get_ready():
     }
 
     if not is_ready:
-        # Se alguma lib faltar ou demorar > 100ms, retorna erro 503
+        # Se alguma lib faltar, retorna erro 503
         raise HTTPException(status_code=503, detail=resultado)
 
     return resultado

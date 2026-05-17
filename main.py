@@ -1,6 +1,19 @@
 import uvicorn
 from fastapi import FastAPI
 
+# Pré-aquece as libs pesadas de renderização no startup para que a
+# primeira chamada de /health/ready (e a 1ª geração) não pague o custo
+# de import a frio. Import guardado: se alguma faltar, o health check
+# de prontidão ainda detecta via a verificação de libs existente.
+try:
+    import matplotlib
+    matplotlib.use("Agg")  # backend não-interativo (sem GUI/servidor)
+    import reportlab  # noqa: F401
+    import docx  # noqa: F401
+    import pptx  # noqa: F401
+except ImportError:
+    pass
+
 from app.adapters.driving.http import (
     apresentacao_routes,
     diagrama_routes,
