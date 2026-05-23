@@ -27,13 +27,13 @@ class DiagramaServiceImpl(DiagramaService):
         self._ia = cliente_ia
         self._renderizador = renderizador
 
-    def gerar_de_branch(self, repositorio: str, branch: str, arquivo: str) -> Diagrama:
+    def gerar_de_branch(self, repositorio: str, branch: str, arquivo: str, tipo: str = "classe") -> Diagrama:
         repo = self._validar_repositorio(repositorio)
         ref = self._validar_branch(branch)
         caminho = self._validar_arquivo(arquivo)
 
         codigo = self._fonte.obter_arquivo_em_branch(repo, ref, caminho)
-        resultado = self._ia.gerar_diagrama_de_codigo(codigo)
+        resultado = self._ia.gerar_diagrama_de_codigo(codigo, tipo)
 
         return Diagrama(
             repositorio=repo,

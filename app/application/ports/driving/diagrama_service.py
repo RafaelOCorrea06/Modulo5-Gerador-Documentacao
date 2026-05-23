@@ -13,6 +13,7 @@ class DiagramaService(ABC):
         repositorio: str,
         branch: str,
         arquivo: str,
+        tipo: str = "classe",
     ) -> Diagrama:
         """Busca codigo no GitHub, manda para IA-Analise e devolve a entidade Diagrama."""
         pass
