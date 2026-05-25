@@ -14,11 +14,11 @@ class ClienteIAAnaliseHTTP(ClienteIAAnalise):
         self._base = base_url.rstrip("/")
         self._timeout = timeout_segundos
 
-    def gerar_diagrama_de_codigo(self, codigo: str) -> Dict[str, Any]:
+    def gerar_diagrama_de_codigo(self, codigo: str, tipo: str = "classe") -> Dict[str, Any]:
         url = f"{self._base}/estrutura/diagrama"
         try:
             with httpx.Client(timeout=self._timeout) as cliente:
-                resposta = cliente.post(url, json={"codigo": codigo})
+                resposta = cliente.post(url, json={"codigo": codigo, "tipo": tipo})
         except httpx.HTTPError as e:
             raise IAAnaliseIndisponivelError(
                 f"erro de rede ao chamar IA-Analise: {e}"
@@ -54,8 +54,8 @@ class ClienteIAAnaliseFake(ClienteIAAnalise):
         self._falha = exc
         self._proxima_resposta = None
 
-    def gerar_diagrama_de_codigo(self, codigo: str) -> Dict[str, Any]:
-        self.chamadas.append(codigo)
+    def gerar_diagrama_de_codigo(self, codigo: str, tipo: str = "classe") -> Dict[str, Any]:
+        self.chamadas.append({"codigo": codigo, "tipo": tipo})
         if self._falha is not None:
             raise self._falha
         return dict(self._proxima_resposta or {

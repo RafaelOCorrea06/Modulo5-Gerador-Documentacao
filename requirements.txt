@@ -8,3 +8,5 @@ matplotlib>=3.8
 
 pytest>=8.0
 httpx>=0.27
+
+gunicorn==23.0.0

@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.application.ports.driving.diagrama_service import DiagramaService
 from app.config.composition_root import CompositionRoot
@@ -26,6 +26,7 @@ class GerarDiagramaRequest(BaseModel):
     branch: str
     arquivo: str
     formato: str = "png"  # "png" | "svg" | "mermaid"
+    tipo: str = Field(default="classe", pattern=r"^(classe|sequencia|caso_de_uso|nuvem)$")
 
 
 _MIMETYPES = {
@@ -62,6 +63,7 @@ def gerar_de_branch(
             repositorio=payload.repositorio,
             branch=payload.branch,
             arquivo=payload.arquivo,
+            tipo=payload.tipo,
         )
     except RequisicaoDiagramaInvalidaError as e:
         raise HTTPException(status_code=400, detail=str(e))

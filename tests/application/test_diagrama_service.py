@@ -40,7 +40,22 @@ def test_pipeline_completo_devolve_diagrama(cenario):
     assert diagrama.arquivo == "app/x.py"
     assert "classDiagram" in diagrama.mermaid
     assert diagrama.tem_componentes()
-    assert ia.chamadas == ["class A:\n    pass\n"]
+    assert ia.chamadas == [{"codigo": "class A:\n    pass\n", "tipo": "classe"}]
+
+
+def test_pipeline_repassa_tipo_para_ia(cenario):
+    service, fonte, ia, _ = cenario
+    fonte.configurar("o/r", "main", "app/x.py", "class A:\n    pass\n")
+    ia.configurar_resposta({
+        "componentes": [],
+        "relacoes": [],
+        "mermaid": "sequenceDiagram\n    participant A\n",
+        "warnings": [],
+        "linguagem": "python",
+    })
+
+    service.gerar_de_branch("o/r", "main", "app/x.py", tipo="sequencia")
+    assert ia.chamadas == [{"codigo": "class A:\n    pass\n", "tipo": "sequencia"}]
 
 
 def test_repositorio_invalido_400(cenario):

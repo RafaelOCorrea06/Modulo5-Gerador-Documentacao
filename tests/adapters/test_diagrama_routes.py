@@ -116,6 +116,46 @@ def test_post_devolve_mermaid_json(cliente):
         main_module.app.dependency_overrides.clear()
 
 
+def test_post_diagrama_branch_tipo_sequencia(cliente):
+    from app.adapters.driving.http.diagrama_routes import get_diagrama_service
+    from app.adapters.driven.clients.fonte_codigo_github import FonteCodigoFake
+    from app.adapters.driven.clients.cliente_ia_analise import ClienteIAAnaliseFake
+    from app.adapters.driven.renderizadores.renderizador_mermaid import RenderizadorMermaidFake
+    from app.application.services.diagrama_service_impl import DiagramaServiceImpl
+    import main as main_module
+
+    fonte = FonteCodigoFake()
+    fonte.configurar("o/r", "main", "x.py", "class A:\n    pass\n")
+    ia = ClienteIAAnaliseFake()
+    ia.configurar_resposta({
+        "componentes": [], "relacoes": [],
+        "mermaid": "sequenceDiagram\n    participant A\n",
+        "warnings": [], "linguagem": "python", "tipo": "sequencia",
+    })
+    service = DiagramaServiceImpl(fonte_codigo=fonte, cliente_ia=ia, renderizador=RenderizadorMermaidFake())
+    main_module.app.dependency_overrides[get_diagrama_service] = lambda: service
+
+    try:
+        r = cliente.post("/diagrama/branch", json={
+            "repositorio": "o/r", "branch": "main", "arquivo": "x.py",
+            "formato": "mermaid", "tipo": "sequencia",
+        })
+        assert r.status_code == 200
+        body = r.json()
+        assert "sequenceDiagram" in body["mermaid"]
+        assert ia.chamadas[0]["tipo"] == "sequencia"
+    finally:
+        main_module.app.dependency_overrides.clear()
+
+
+def test_post_tipo_invalido_422(cliente):
+    r = cliente.post("/diagrama/branch", json={
+        "repositorio": "o/r", "branch": "main", "arquivo": "x.py",
+        "formato": "mermaid", "tipo": "xyz",
+    })
+    assert r.status_code == 422
+
+
 def test_post_repo_invalido_400(cliente):
     r = cliente.post("/diagrama/branch", json={
         "repositorio": "semslash", "branch": "main", "arquivo": "x.py", "formato": "png",

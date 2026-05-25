@@ -1,12 +1,13 @@
-from app.adapters.driven.renderizadores.adaptador_markdown_nativo import (
-    AdaptadorMarkdownNativo,
+from app.adapters.driven.renderizadores.adaptador_markdown_relatorio import (
+    AdaptadorMarkdownRelatorio,
 )
 from app.adapters.driven.renderizadores.adaptador_pythondocx import (
     AdaptadorPythonDocx,
 )
-from app.adapters.driven.renderizadores.adaptador_reportlab import (
-    AdaptadorReportLab,
+from app.adapters.driven.renderizadores.adaptador_pdf_relatorio import (
+    AdaptadorPdfRelatorio,
 )
+
 from app.adapters.driving.http.schemas import RelatorioRequest
 from app.domain.entidades.artefato import ArtefatoGerado
 from app.domain.entidades.documento import DocumentoTecnico
@@ -22,9 +23,9 @@ class RelatorioService:
     """
 
     def __init__(self) -> None:
-        self.adaptador_markdown = AdaptadorMarkdownNativo()
+        self.adaptador_markdown = AdaptadorMarkdownRelatorio()
         self.adaptador_docx = AdaptadorPythonDocx()
-        self.adaptador_pdf = AdaptadorReportLab()
+        self.adaptador_pdf = AdaptadorPdfRelatorio()
 
     def gerar(self, request: RelatorioRequest) -> ArtefatoGerado:
         documento = self._converter_request_para_documento(request)
